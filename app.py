@@ -20,6 +20,7 @@ HEADERS = {
 }
 
 CEPS_BRASIL = [f"{random.randint(1000000, 9999999):08d}" for _ in range(100000)]
+CAMINHO_ARQUIVO = "/tmp/fretes.json"  # <-- Aqui o novo caminho
 
 def gerar_dados_aleatorios():
     return {
@@ -87,10 +88,10 @@ def consultar_frete(dados):
         print(f"[EXCEÇÃO] {str(e)}")
         return {"erro_exception": True, "motivo": str(e)}
 
-def salvar_resultado(dados_resultado, arquivo="fretes.json"):
+def salvar_resultado(dados_resultado, arquivo=CAMINHO_ARQUIVO):
     try:
         dados_resultado["timestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        with open(arquivo, "w", encoding="utf-8-sig") as f:  # BOM garante compatibilidade com js/shopify
+        with open(arquivo, "w", encoding="utf-8-sig") as f:
             json.dump(dados_resultado, f, ensure_ascii=False, indent=2)
         print(f"[✔] Salvo com sucesso em {arquivo}")
     except Exception as e:
@@ -128,13 +129,11 @@ def calcular_frete():
 @app.route('/fretes.json', methods=['GET'])
 def enviar_fretes_para_shopify():
     try:
-        caminho_arquivo = "fretes.json"
-
-        if not os.path.exists(caminho_arquivo):
+        if not os.path.exists(CAMINHO_ARQUIVO):
             print("📂 fretes.json não encontrado.")
             return jsonify({"fretes": []})
 
-        with open(caminho_arquivo, "r", encoding="utf-8-sig") as f:  # SIG aqui também
+        with open(CAMINHO_ARQUIVO, "r", encoding="utf-8-sig") as f:
             conteudo = f.read()
             print("📄 Conteúdo bruto:", conteudo)
             registro = json.loads(conteudo)
