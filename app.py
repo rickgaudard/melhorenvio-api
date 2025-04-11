@@ -90,8 +90,9 @@ def consultar_frete(dados):
 def salvar_resultado(dados_resultado, arquivo="fretes.json"):
     try:
         dados_resultado["timestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        with open(arquivo, "w", encoding="utf-8") as f:
+        with open(arquivo, "w", encoding="utf-8-sig") as f:  # BOM garante compatibilidade com js/shopify
             json.dump(dados_resultado, f, ensure_ascii=False, indent=2)
+        print(f"[✔] Salvo com sucesso em {arquivo}")
     except Exception as e:
         print(f"[ERRO SALVANDO JSON] {str(e)}")
 
@@ -130,10 +131,13 @@ def enviar_fretes_para_shopify():
         caminho_arquivo = "fretes.json"
 
         if not os.path.exists(caminho_arquivo):
+            print("📂 fretes.json não encontrado.")
             return jsonify({"fretes": []})
 
-        with open(caminho_arquivo, "r", encoding="utf-8") as f:
-            registro = json.load(f)
+        with open(caminho_arquivo, "r", encoding="utf-8-sig") as f:  # SIG aqui também
+            conteudo = f.read()
+            print("📄 Conteúdo bruto:", conteudo)
+            registro = json.loads(conteudo)
 
         agora = datetime.utcnow()
         timestamp = registro.get("timestamp")
@@ -145,6 +149,7 @@ def enviar_fretes_para_shopify():
         return jsonify({"fretes": []})
 
     except Exception as e:
+        print(f"[ERRO LEITURA JSON] {str(e)}")
         return jsonify({"erro": str(e)}), 500
 
 @app.route('/')
