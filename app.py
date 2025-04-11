@@ -89,10 +89,12 @@ def consultar_frete(dados):
 
 def salvar_resultado(dados_resultado, arquivo="fretes.json"):
     try:
+        dados_resultado["timestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         with open(arquivo, "w", encoding="utf-8") as f:
-            json.dump({"fretes": dados_resultado.get("fretes", [])}, f, ensure_ascii=False, indent=2)
+            json.dump(dados_resultado, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"[ERRO SALVANDO JSON] {str(e)}")
+
 @app.route('/calcular-frete', methods=['POST'])
 def calcular_frete():
     dados = request.json
