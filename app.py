@@ -7,7 +7,7 @@ import time
 import threading
 
 app = Flask(__name__)
-CORS(app)  # Libera acesso de qualquer origem
+CORS(app, origins="*", methods=["GET", "POST", "OPTIONS"])
 
 TOKEN = os.getenv("MELHOR_ENVIO_TOKEN")
 
