@@ -3,92 +3,73 @@ from flask_cors import CORS
 import requests
 import os
 import json
+from datetime import datetime
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app)  # Permite CORS para Shopify
 
 MELHOR_ENVIO_TOKEN = os.getenv("MELHOR_ENVIO_TOKEN")
 
-DIMENSOES_PADRAO = {
-    "largura": 15,
-    "altura": 10,
-    "comprimento": 20
-}
-
-@app.route('/debug-token')
-def debug_token():
-    if MELHOR_ENVIO_TOKEN:
-        return jsonify({"status": "Token carregado com sucesso", "token_inicio": MELHOR_ENVIO_TOKEN[:10]})
-    else:
-        return jsonify({"erro": "Token não encontrado nas variáveis de ambiente"}), 500
+@app.route('/')
+def home():
+    return "API de Frete Online"
 
 @app.route('/calcular-frete', methods=['POST'])
 def calcular_frete():
-    data = request.json
-    print("🔵 Dados recebidos da Shopify:", data)
-
-    cep_origem = data.get('cep_origem')
-    cep_destino = data.get('cep_destino')
-    peso = data.get('peso')
-    valor = data.get('valor')
-
-    largura = data.get('largura', DIMENSOES_PADRAO["largura"])
-    altura = data.get('altura', DIMENSOES_PADRAO["altura"])
-    comprimento = data.get('comprimento', DIMENSOES_PADRAO["comprimento"])
-
-    if not cep_origem or not cep_destino or not peso or not valor:
-        print("❌ Dados incompletos.")
-        return jsonify({"erro": "Dados incompletos"}), 400
-
-    payload = [{
-        "from": {"postal_code": cep_origem},
-        "to": {"postal_code": cep_destino},
-        "products": [{
-            "weight": float(peso),
-            "width": int(largura),
-            "height": int(altura),
-            "length": int(comprimento),
-            "insurance_value": float(valor)
-        }]
-    }]
-
-    print("📦 Payload enviado para Melhor Envio:", payload)
-
-    headers = {
-        "Authorization": f"Bearer {MELHOR_ENVIO_TOKEN}",
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-    }
-
     try:
+        dados = request.json
+        if not all(k in dados for k in ['cep_origem', 'cep_destino', 'peso', 'valor']):
+            return jsonify({"erro": "Dados incompletos"}), 400
+
+        payload = [{
+            "from": {"postal_code": dados['cep_origem']},
+            "to": {"postal_code": dados['cep_destino']},
+            "package": {
+                "weight": dados['peso'],
+                "width": dados.get('largura', 15),
+                "height": dados.get('altura', 10),
+                "length": dados.get('comprimento', 20)
+            },
+            "options": {
+                "insurance_value": dados['valor']
+            },
+            "services": []
+        }]
+
+        headers = {
+            "Authorization": f"Bearer {MELHOR_ENVIO_TOKEN}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+
         response = requests.post(
             "https://www.melhorenvio.com.br/api/v2/me/shipment/calculate",
-            json=payload,
-            headers=headers
+            headers=headers,
+            json=payload
         )
-        response.raise_for_status()
-        dados_frete = response.json()
-        print("✅ Resposta recebida:", dados_frete)
 
-        fretes_formatados = []
-        for frete in dados_frete:
-            if 'error' in frete:
+        if response.status_code != 200:
+            return jsonify({"erro": "Erro na API", "status": response.status_code}), 500
+
+        resultado = response.json()
+
+        fretes = []
+        for item in resultado.get('data', []):
+            if item.get("error"):
                 continue
-            fretes_formatados.append({
-                "nome": frete["name"],
-                "valor": frete["price"],
-                "prazo": frete["delivery_time"],
-                "transportadora": frete["company"]["name"]
+            fretes.append({
+                "nome": item["name"],
+                "valor": item["price"],
+                "prazo": item["delivery_time"]
             })
 
+        # Armazena como se fosse arquivo local (temporário)
         with open("fretes.json", "w", encoding="utf-8") as f:
-            json.dump(fretes_formatados, f, ensure_ascii=False)
+            json.dump({"fretes": fretes}, f, ensure_ascii=False, indent=2)
 
-        return jsonify({"status": "OK"})
-    except requests.exceptions.RequestException as e:
-        print("❌ Erro ao consultar Melhor Envio:", str(e))
-        if e.response:
-            print("📨 Resposta crua:", e.response.text)
+        return jsonify({"fretes": fretes})
+
+    except Exception as e:
         return jsonify({"erro": str(e)}), 500
 
 @app.route('/consultar-frete', methods=['GET'])
@@ -96,13 +77,9 @@ def consultar_frete():
     try:
         with open("fretes.json", "r", encoding="utf-8") as f:
             dados = json.load(f)
-        return jsonify({"fretes": dados})
-    except FileNotFoundError:
-        return jsonify({"erro": "Nenhum frete encontrado."}), 404
-
-@app.route('/')
-def home():
-    return "API de Frete está online."
+        return jsonify(dados)
+    except:
+        return jsonify({"fretes": []})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run()
