@@ -9,11 +9,17 @@ CORS(app)
 
 MELHOR_ENVIO_TOKEN = os.getenv("MELHOR_ENVIO_TOKEN")
 
-DIMENSOES_PADRAO = {"largura": 15, "altura": 10, "comprimento": 20}
+DIMENSOES_PADRAO = {
+    "largura": 15,
+    "altura": 10,
+    "comprimento": 20
+}
 
 @app.route('/calcular-frete', methods=['POST'])
 def calcular_frete():
     data = request.json
+    print("🔵 Dados recebidos da Shopify:", data)
+
     cep_origem = data.get('cep_origem')
     cep_destino = data.get('cep_destino')
     peso = data.get('peso')
@@ -24,6 +30,7 @@ def calcular_frete():
     comprimento = data.get('comprimento', DIMENSOES_PADRAO["comprimento"])
 
     if not cep_origem or not cep_destino or not peso or not valor:
+        print("❌ Dados incompletos.")
         return jsonify({"erro": "Dados incompletos"}), 400
 
     payload = [{
@@ -37,6 +44,8 @@ def calcular_frete():
             "insurance_value": float(valor)
         }]
     }]
+
+    print("📦 Payload enviado para Melhor Envio:", payload)
 
     headers = {
         "Authorization": f"Bearer {MELHOR_ENVIO_TOKEN}",
@@ -52,6 +61,7 @@ def calcular_frete():
         )
         response.raise_for_status()
         dados_frete = response.json()
+        print("✅ Resposta recebida:", dados_frete)
 
         fretes_formatados = []
         for frete in dados_frete:
@@ -69,8 +79,8 @@ def calcular_frete():
 
         return jsonify({"status": "OK"})
     except Exception as e:
+        print("❌ Erro ao consultar Melhor Envio:", str(e))
         return jsonify({"erro": str(e)}), 500
-
 
 @app.route('/consultar-frete', methods=['GET'])
 def consultar_frete():
@@ -79,4 +89,11 @@ def consultar_frete():
             dados = json.load(f)
         return jsonify({"fretes": dados})
     except FileNotFoundError:
-        return jsonify({"erro": "Nenhum frete consultado ainda."}), 404
+        return jsonify({"erro": "Nenhum frete encontrado."}), 404
+
+@app.route('/')
+def home():
+    return "API de Frete está online."
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
