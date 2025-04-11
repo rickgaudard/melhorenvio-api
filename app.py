@@ -17,6 +17,13 @@ def index():
 def calcular_frete():
     try:
         data = request.get_json()
+        print("📦 Dados recebidos:", data)
+
+        # Validação mínima
+        campos = ['cep_origem', 'cep_destino', 'peso', 'valor']
+        for campo in campos:
+            if campo not in data or not data[campo]:
+                return jsonify({"erro": f"Campo obrigatório ausente: {campo}"}), 400
 
         cep_origem = data['cep_origem']
         cep_destino = data['cep_destino']
@@ -47,11 +54,16 @@ def calcular_frete():
             "Accept": "application/json"
         }
 
+        print("🔵 Payload enviado:", payload)
+
         response = requests.post(
             "https://www.melhorenvio.com.br/api/v2/me/shipment/calculate",
             headers=headers,
             json=payload
         )
+
+        print("🟡 Status:", response.status_code)
+        print("🟠 Resposta da API:", response.text)
 
         if response.status_code != 200:
             return jsonify({"erro": "Erro ao consultar frete"}), 500
@@ -74,6 +86,7 @@ def calcular_frete():
         return jsonify({"status": "ok"})
 
     except Exception as e:
+        print("❌ Erro interno:", str(e))
         return jsonify({"erro": str(e)}), 500
 
 @app.route('/consultar-frete', methods=['GET'])
