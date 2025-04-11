@@ -5,7 +5,7 @@ import os
 import json
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 MELHOR_ENVIO_TOKEN = os.getenv("MELHOR_ENVIO_TOKEN")
 
@@ -14,6 +14,13 @@ DIMENSOES_PADRAO = {
     "altura": 10,
     "comprimento": 20
 }
+
+@app.route('/debug-token')
+def debug_token():
+    if MELHOR_ENVIO_TOKEN:
+        return jsonify({"status": "Token carregado com sucesso", "token_inicio": MELHOR_ENVIO_TOKEN[:10]})
+    else:
+        return jsonify({"erro": "Token não encontrado nas variáveis de ambiente"}), 500
 
 @app.route('/calcular-frete', methods=['POST'])
 def calcular_frete():
@@ -78,8 +85,10 @@ def calcular_frete():
             json.dump(fretes_formatados, f, ensure_ascii=False)
 
         return jsonify({"status": "OK"})
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         print("❌ Erro ao consultar Melhor Envio:", str(e))
+        if e.response:
+            print("📨 Resposta crua:", e.response.text)
         return jsonify({"erro": str(e)}), 500
 
 @app.route('/consultar-frete', methods=['GET'])
