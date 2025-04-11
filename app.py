@@ -126,7 +126,7 @@ def calcular_frete():
 
     return jsonify(resultado)
 
-@app.route('/fretes.json', methods=['GET'])
+@app.route('tmp/fretes.json', methods=['GET'])
 def enviar_fretes_para_shopify():
     try:
         if not os.path.exists(CAMINHO_ARQUIVO):
