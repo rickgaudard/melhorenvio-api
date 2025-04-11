@@ -1,8 +1,10 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import requests
 import os
 
 app = Flask(__name__)
+CORS(app)  # libera acesso externo, como da Shopify
 
 MELHOR_ENVIO_TOKEN = os.getenv("MELHOR_ENVIO_TOKEN")
 
@@ -25,7 +27,7 @@ def calcular_frete():
     altura = data.get('altura', DIMENSOES_PADRAO["altura"])
     comprimento = data.get('comprimento', DIMENSOES_PADRAO["comprimento"])
 
-    if not cep_origem or not cep_destino or not peso or not valor:
+    if not cep_origem or not cep_destino or not peso:
         return jsonify({"erro": "Dados incompletos"}), 400
 
     payload = [{
@@ -53,16 +55,24 @@ def calcular_frete():
             headers=headers
         )
         response.raise_for_status()
-        return jsonify(response.json())
+        dados_frete = response.json()
+
+        # Simplifica e envia só o necessário de volta à Shopify
+        fretes_formatados = []
+        for frete in dados_frete:
+            if 'error' in frete:
+                continue
+            fretes_formatados.append({
+                "name": frete["name"],
+                "price": frete["price"],
+                "delivery_time": frete["delivery_time"],
+                "company": frete["company"]
+            })
+
+        return jsonify(fretes_formatados)
     except requests.exceptions.RequestException as e:
-        print("❌ Erro ao consultar Melhor Envio:", e)
-        if e.response is not None:
-            print("📥 Resposta:", e.response.text)
-        return jsonify({"erro": "Erro interno na comunicação com Melhor Envio"}), 500
+        return jsonify({"erro": str(e)}), 500
 
 @app.route('/')
 def home():
     return "API de Frete está online."
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
