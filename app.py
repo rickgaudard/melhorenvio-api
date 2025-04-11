@@ -6,6 +6,7 @@ from flask import Flask, request, jsonify
 import threading
 import os
 from flask_cors import CORS
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 CORS(app, origins="*", methods=["GET", "POST", "OPTIONS"])
@@ -18,7 +19,7 @@ HEADERS = {
     'Authorization': f'Bearer {TOKEN}'
 }
 
-CEPS_BRASIL = [f"{random.randint(1000000, 9999999):08d}" for _ in range(100000)]  # Simula CEPs válidos
+CEPS_BRASIL = [f"{random.randint(1000000, 9999999):08d}" for _ in range(100000)]
 
 def gerar_dados_aleatorios():
     return {
@@ -87,6 +88,7 @@ def consultar_frete(dados):
         return {"erro_exception": True, "motivo": str(e)}
 
 def salvar_resultado(dados_resultado, arquivo="resultados_fretes.jsonl"):
+    dados_resultado["timestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
     with open(arquivo, "a", encoding="utf-8") as f:
         f.write(json.dumps(dados_resultado, ensure_ascii=False) + "\n")
 
@@ -133,8 +135,19 @@ def enviar_fretes_para_shopify():
         if not linhas:
             return jsonify({"fretes": []})
 
-        ultimo_registro = json.loads(linhas[-1])
-        return jsonify({"fretes": ultimo_registro.get("fretes", [])})
+        agora = datetime.utcnow()
+        for linha in reversed(linhas):
+            try:
+                registro = json.loads(linha)
+                timestamp = registro.get("timestamp")
+                if timestamp:
+                    tempo = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
+                    if agora - tempo <= timedelta(minutes=5):
+                        return jsonify({"fretes": registro.get("fretes", [])})
+            except Exception:
+                continue
+
+        return jsonify({"fretes": []})
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
