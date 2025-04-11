@@ -25,22 +25,19 @@ def calcular_frete():
     altura = data.get('altura', DIMENSOES_PADRAO["altura"])
     comprimento = data.get('comprimento', DIMENSOES_PADRAO["comprimento"])
 
-    if not cep_origem or not cep_destino or not peso:
+    if not cep_origem or not cep_destino or not peso or not valor:
         return jsonify({"erro": "Dados incompletos"}), 400
 
     payload = [{
         "from": {"postal_code": cep_origem},
         "to": {"postal_code": cep_destino},
-        "package": {
-            "weight": peso,
-            "width": largura,
-            "height": altura,
-            "length": comprimento
-        },
-        "options": {
-            "insurance_value": valor
-        },
-        "services": []
+        "products": [{
+            "weight": float(peso),
+            "width": int(largura),
+            "height": int(altura),
+            "length": int(comprimento),
+            "insurance_value": float(valor)
+        }]
     }]
 
     headers = {
@@ -55,32 +52,13 @@ def calcular_frete():
             json=payload,
             headers=headers
         )
-        print("🔵 Payload enviado:", payload)
-        print("🟡 Status:", response.status_code)
-        print("🟠 Resposta da API:", response.text)
-
         response.raise_for_status()
         return jsonify(response.json())
-
     except requests.exceptions.RequestException as e:
-        print("🔴 Erro na requisição:", str(e))
-        return jsonify({
-            "erro": str(e),
-            "status_code": response.status_code if 'response' in locals() else "desconhecido",
-            "detalhe": response.text if 'response' in locals() else "sem resposta"
-        }), 500
-
-@app.route('/debug-token')
-def debug_token():
-    token = MELHOR_ENVIO_TOKEN
-    if token:
-        return jsonify({
-            "status": "Token carregado com sucesso",
-            "token_inicio": token[:20] + "..."
-        })
-    return jsonify({
-        "status": "Token não encontrado"
-    }), 500
+        print("❌ Erro ao consultar Melhor Envio:", e)
+        if e.response is not None:
+            print("📥 Resposta:", e.response.text)
+        return jsonify({"erro": "Erro interno na comunicação com Melhor Envio"}), 500
 
 @app.route('/')
 def home():
