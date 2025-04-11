@@ -1,7 +1,12 @@
 from flask import Flask, request, jsonify
-import requests, json, os
+from flask_cors import CORS
+import requests
+import json
+import os
+import time
 
 app = Flask(__name__)
+CORS(app)  # Libera acesso de qualquer origem, inclusive Shopify
 
 TOKEN = os.getenv("MELHOR_ENVIO_TOKEN")
 
@@ -11,10 +16,15 @@ HEADERS = {
     'Authorization': f'Bearer {TOKEN}'
 }
 
-@app.route("/calcular-frete", methods=["POST"])
+FRETES_FILE = "fretes.json"
+
+@app.route('/calcular-frete', methods=['POST'])
 def calcular_frete():
     try:
-        dados = request.json
+        dados = request.get_json()
+
+        if not dados:
+            return jsonify({"erro": "Dados ausentes"}), 400
 
         response = requests.post(
             "https://www.melhorenvio.com.br/api/v2/me/shipment/calculate",
@@ -23,35 +33,55 @@ def calcular_frete():
         )
 
         if response.status_code != 200:
-            return jsonify({"erro_http": True, "codigo": response.status_code, "resposta": response.text}), 500
+            return jsonify({"erro": "Falha na API do Melhor Envio", "status_code": response.status_code}), 500
 
         resultado = response.json()
 
         if "data" not in resultado:
-            return jsonify({"erro_json": True, "resposta": resultado}), 500
+            return jsonify({"erro": "Resposta inválida da API"}), 500
 
-        # Gravar resultado em um "cache"
-        with open("fretes.json", "w", encoding="utf-8") as f:
-            json.dump(resultado["data"], f, ensure_ascii=False, indent=2)
+        fretes = []
+        for r in resultado["data"]:
+            if r.get("error"):
+                continue
+            fretes.append({
+                "nome": r.get("name"),
+                "valor": r.get("price"),
+                "prazo": r.get("delivery_time"),
+                "empresa": r.get("company", {}).get("name")
+            })
 
-        return jsonify({"fretes": resultado["data"]})
+        with open(FRETES_FILE, "w", encoding="utf-8") as f:
+            json.dump({"fretes": fretes}, f, ensure_ascii=False, indent=2)
+
+        return jsonify({"fretes": fretes})
 
     except Exception as e:
-        return jsonify({"erro_exception": True, "motivo": str(e)}), 500
+        return jsonify({"erro": str(e)}), 500
 
-@app.route("/consultar-frete", methods=["GET"])
-def consultar_cache():
+
+@app.route('/consultar-frete', methods=['GET'])
+def consultar_frete():
     try:
-        with open("fretes.json", "r", encoding="utf-8") as f:
-            data = json.load(f)
-        os.remove("fretes.json")  # Apaga o cache logo após retorno
-        return jsonify({"fretes": data})
-    except:
-        return jsonify({"fretes": []})
+        if not os.path.exists(FRETES_FILE):
+            return jsonify({"fretes": []})
 
-@app.route("/")
+        with open(FRETES_FILE, "r", encoding="utf-8") as f:
+            dados = json.load(f)
+
+        # Limpa o arquivo após envio
+        with open(FRETES_FILE, "w", encoding="utf-8") as f:
+            json.dump({"fretes": []}, f)
+
+        return jsonify(dados)
+
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+
+@app.route('/')
 def home():
-    return "API de Frete - Shopify + Melhor Envio"
+    return "API de Frete Render + Shopify Online"
 
 if __name__ == '__main__':
-    app.run()
+    app.run(host='0.0.0.0', port=5000)
