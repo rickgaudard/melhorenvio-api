@@ -87,10 +87,10 @@ def consultar_frete(dados):
         print(f"[EXCEÇÃO] {str(e)}")
         return {"erro_exception": True, "motivo": str(e)}
 
-def salvar_resultado(dados_resultado, arquivo="resultados_fretes.jsonl"):
+def salvar_resultado(dados_resultado, arquivo="fretes.json"):
     dados_resultado["timestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-    with open(arquivo, "a", encoding="utf-8") as f:
-        f.write(json.dumps(dados_resultado, ensure_ascii=False) + "\n")
+    with open(arquivo, "w", encoding="utf-8") as f:
+        json.dump(dados_resultado, f, ensure_ascii=False, indent=2)
 
 @app.route('/calcular-frete', methods=['POST'])
 def calcular_frete():
@@ -124,28 +124,20 @@ def calcular_frete():
 @app.route('/fretes.json', methods=['GET'])
 def enviar_fretes_para_shopify():
     try:
-        caminho_arquivo = "resultados_fretes.jsonl"
+        caminho_arquivo = "fretes.json"
 
         if not os.path.exists(caminho_arquivo):
             return jsonify({"fretes": []})
 
         with open(caminho_arquivo, "r", encoding="utf-8") as f:
-            linhas = f.readlines()
-
-        if not linhas:
-            return jsonify({"fretes": []})
+            registro = json.load(f)
 
         agora = datetime.utcnow()
-        for linha in reversed(linhas):
-            try:
-                registro = json.loads(linha)
-                timestamp = registro.get("timestamp")
-                if timestamp:
-                    tempo = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
-                    if agora - tempo <= timedelta(minutes=5):
-                        return jsonify({"fretes": registro.get("fretes", [])})
-            except Exception:
-                continue
+        timestamp = registro.get("timestamp")
+        if timestamp:
+            tempo = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
+            if agora - tempo <= timedelta(minutes=5):
+                return jsonify({"fretes": registro.get("fretes", [])})
 
         return jsonify({"fretes": []})
 
