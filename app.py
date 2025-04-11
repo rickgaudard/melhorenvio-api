@@ -119,6 +119,26 @@ def calcular_frete():
 
     return jsonify(resultado)
 
+@app.route('/fretes.json', methods=['GET'])
+def enviar_fretes_para_shopify():
+    try:
+        caminho_arquivo = "resultados_fretes.jsonl"
+
+        if not os.path.exists(caminho_arquivo):
+            return jsonify({"fretes": []})
+
+        with open(caminho_arquivo, "r", encoding="utf-8") as f:
+            linhas = f.readlines()
+
+        if not linhas:
+            return jsonify({"fretes": []})
+
+        ultimo_registro = json.loads(linhas[-1])
+        return jsonify({"fretes": ultimo_registro.get("fretes", [])})
+
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
 @app.route('/')
 def home():
     return "API de Frete com suporte à Shopify Online."
