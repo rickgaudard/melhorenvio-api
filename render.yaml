@@ -1,4 +1,3 @@
-HEAD
 services:
   - type: web
     name: melhorenvio-api
