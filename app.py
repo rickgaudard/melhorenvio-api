@@ -19,26 +19,26 @@ def calcular_frete():
     cep_origem = data.get('cep_origem')
     cep_destino = data.get('cep_destino')
     peso = data.get('peso')
-    valor = data.get('valor', 0)
+    valor = data.get('valor')
 
     largura = data.get('largura', DIMENSOES_PADRAO["largura"])
     altura = data.get('altura', DIMENSOES_PADRAO["altura"])
     comprimento = data.get('comprimento', DIMENSOES_PADRAO["comprimento"])
 
-    if not all([cep_origem, cep_destino, peso]):
+    if not cep_origem or not cep_destino or not peso:
         return jsonify({"erro": "Dados incompletos"}), 400
 
     payload = [{
         "from": {"postal_code": cep_origem},
         "to": {"postal_code": cep_destino},
         "package": {
-            "weight": float(peso),
-            "width": int(largura),
-            "height": int(altura),
-            "length": int(comprimento)
+            "weight": peso,
+            "width": largura,
+            "height": altura,
+            "length": comprimento
         },
         "options": {
-            "insurance_value": float(valor)
+            "insurance_value": valor
         },
         "services": []
     }]
@@ -55,24 +55,36 @@ def calcular_frete():
             json=payload,
             headers=headers
         )
+        print("🔵 Payload enviado:", payload)
+        print("🟡 Status:", response.status_code)
+        print("🟠 Resposta da API:", response.text)
+
         response.raise_for_status()
         return jsonify(response.json())
-    except requests.exceptions.HTTPError as http_err:
-        return jsonify({"erro": "Erro HTTP", "detalhes": str(http_err), "resposta": response.text}), 500
-    except Exception as e:
-        return jsonify({"erro": "Erro ao conectar com a API", "detalhes": str(e)}), 500
+
+    except requests.exceptions.RequestException as e:
+        print("🔴 Erro na requisição:", str(e))
+        return jsonify({
+            "erro": str(e),
+            "status_code": response.status_code if 'response' in locals() else "desconhecido",
+            "detalhe": response.text if 'response' in locals() else "sem resposta"
+        }), 500
+
+@app.route('/debug-token')
+def debug_token():
+    token = MELHOR_ENVIO_TOKEN
+    if token:
+        return jsonify({
+            "status": "Token carregado com sucesso",
+            "token_inicio": token[:20] + "..."
+        })
+    return jsonify({
+        "status": "Token não encontrado"
+    }), 500
 
 @app.route('/')
 def home():
     return "API de Frete está online."
-
-@app.route('/debug-token')
-def debug_token():
-    token = os.getenv("MELHOR_ENVIO_TOKEN")
-    if token:
-        return jsonify({"status": "Token carregado com sucesso", "token_inicio": token[:10] + "..."}), 200
-    else:
-        return jsonify({"erro": "Token não foi carregado"}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
