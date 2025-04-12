@@ -2,7 +2,7 @@ import requests
 import random
 import time
 import json
-from flask import Flask, request, jsonify, request
+from flask import Flask, request, jsonify
 import threading
 import os
 from flask_cors import CORS
@@ -97,16 +97,13 @@ def salvar_resultado(dados_resultado, arquivo=CAMINHO_ARQUIVO):
         dados_resultado["timestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         ULTIMO_FRETE = dados_resultado
 
-        # Fallback por cep_destino para acesso direto
         cep = dados_resultado.get("entrada", {}).get("to", {}).get("postal_code")
         if cep:
             FILA_FRETES[cep] = dados_resultado
 
-        # Salva em /tmp
         with open(arquivo, "w", encoding="utf-8-sig") as f:
             json.dump(dados_resultado, f, ensure_ascii=False, indent=2)
 
-        # Salva também em fretes.json (público para Shopify)
         with open("fretes.json", "w", encoding="utf-8-sig") as fpub:
             json.dump(dados_resultado, fpub, ensure_ascii=False, indent=2)
 
@@ -145,10 +142,9 @@ def calcular_frete():
     return jsonify(resultado)
 
 @app.route('/tmp/fretes.json', methods=['GET'])
-@app.route('/fretes.json', methods=['GET'])  # rota pública para Shopify
+@app.route('/fretes.json', methods=['GET'])
 def enviar_fretes_para_shopify():
     try:
-        # Primeiro: tenta ler do arquivo
         if os.path.exists(CAMINHO_ARQUIVO):
             with open(CAMINHO_ARQUIVO, "r", encoding="utf-8-sig") as f:
                 conteudo = f.read()
@@ -162,7 +158,6 @@ def enviar_fretes_para_shopify():
                 if agora - tempo <= timedelta(minutes=5):
                     return jsonify({"fretes": registro.get("fretes", [])})
 
-        # Segundo: memória RAM
         if ULTIMO_FRETE:
             print("🧠 Usando fallback da RAM.")
             return jsonify({"fretes": ULTIMO_FRETE.get("fretes", [])})
