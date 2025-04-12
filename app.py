@@ -2,7 +2,7 @@ import requests
 import random
 import time
 import json
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, request
 import threading
 import os
 from flask_cors import CORS
@@ -22,7 +22,8 @@ HEADERS = {
 CEPS_BRASIL = [f"{random.randint(1000000, 9999999):08d}" for _ in range(100000)]
 CAMINHO_ARQUIVO = "/tmp/fretes.json"
 
-ULTIMO_FRETE = None  # fallback final em RAM
+ULTIMO_FRETE = None  # fallback RAM
+FILA_FRETES = {}     # fallback por cep destino
 
 def gerar_dados_aleatorios():
     return {
@@ -96,9 +97,16 @@ def salvar_resultado(dados_resultado, arquivo=CAMINHO_ARQUIVO):
         dados_resultado["timestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         ULTIMO_FRETE = dados_resultado
 
+        # Fallback por cep_destino para acesso direto
+        cep = dados_resultado.get("entrada", {}).get("to", {}).get("postal_code")
+        if cep:
+            FILA_FRETES[cep] = dados_resultado
+
+        # Salva em /tmp
         with open(arquivo, "w", encoding="utf-8-sig") as f:
             json.dump(dados_resultado, f, ensure_ascii=False, indent=2)
 
+        # Salva também em fretes.json (público para Shopify)
         with open("fretes.json", "w", encoding="utf-8-sig") as fpub:
             json.dump(dados_resultado, fpub, ensure_ascii=False, indent=2)
 
@@ -137,9 +145,10 @@ def calcular_frete():
     return jsonify(resultado)
 
 @app.route('/tmp/fretes.json', methods=['GET'])
-@app.route('/fretes.json', methods=['GET'])  # rota alternativa legível por Shopify
+@app.route('/fretes.json', methods=['GET'])  # rota pública para Shopify
 def enviar_fretes_para_shopify():
     try:
+        # Primeiro: tenta ler do arquivo
         if os.path.exists(CAMINHO_ARQUIVO):
             with open(CAMINHO_ARQUIVO, "r", encoding="utf-8-sig") as f:
                 conteudo = f.read()
@@ -153,14 +162,29 @@ def enviar_fretes_para_shopify():
                 if agora - tempo <= timedelta(minutes=5):
                     return jsonify({"fretes": registro.get("fretes", [])})
 
+        # Segundo: memória RAM
         if ULTIMO_FRETE:
-            print("🧠 Usando fallback em memória RAM.")
+            print("🧠 Usando fallback da RAM.")
             return jsonify({"fretes": ULTIMO_FRETE.get("fretes", [])})
 
         return jsonify({"fretes": []})
 
     except Exception as e:
         print(f"[ERRO LEITURA JSON] {str(e)}")
+        return jsonify({"erro": str(e)}), 500
+
+@app.route('/fretes-diretos.json', methods=['GET'])
+def acesso_direto_memoria_por_cep():
+    try:
+        cep = request.args.get("dest")
+        if cep and cep in FILA_FRETES:
+            print(f"⚡ Fallback ultra direto por CEP {cep}")
+            return jsonify({"fretes": FILA_FRETES[cep].get("fretes", [])})
+
+        return jsonify({"fretes": []})
+
+    except Exception as e:
+        print(f"[ERRO DIRETO] {str(e)}")
         return jsonify({"erro": str(e)}), 500
 
 @app.route('/')
