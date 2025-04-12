@@ -164,33 +164,11 @@ def enviar_fretes_para_shopify():
             if timestamp:
                 tempo = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
                 if agora - tempo <= timedelta(minutes=5):
-    fretes_raw = registro.get("fretes", [])
-    fretes_formatados = []
-
-    for f in fretes_raw:
-        if not f.get("erro") and (f.get("preco") or f.get("preco") == 0):
-            fretes_formatados.append({
-                "transportadora": f.get("transportadora") or f.get("company", {}).get("name") or "Transportadora",
-                "preco": f.get("preco") or f.get("price"),
-                "prazo_entrega": f.get("prazo_entrega") or f.get("delivery_time")
-            })
-
-    return jsonify({"fretes": fretes_formatados})
+                    return jsonify({"fretes": registro.get("fretes", [])})
 
         if ULTIMO_FRETE:
             print("🧠 Usando fallback da RAM.")
-           fretes_raw = ULTIMO_FRETE.get("fretes", [])
-fretes_formatados = []
-
-for f in fretes_raw:
-    if not f.get("erro") and (f.get("preco") or f.get("preco") == 0):
-        fretes_formatados.append({
-            "transportadora": f.get("transportadora") or f.get("company", {}).get("name") or "Transportadora",
-            "preco": f.get("preco") or f.get("price"),
-            "prazo_entrega": f.get("prazo_entrega") or f.get("delivery_time")
-        })
-
-return jsonify({"fretes": fretes_formatados})
+            return jsonify({"fretes": ULTIMO_FRETE.get("fretes", [])})
 
         return jsonify({"fretes": []})
 
