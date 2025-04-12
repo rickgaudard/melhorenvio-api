@@ -99,7 +99,6 @@ def salvar_resultado(dados_resultado, arquivo=CAMINHO_ARQUIVO):
         with open(arquivo, "w", encoding="utf-8-sig") as f:
             json.dump(dados_resultado, f, ensure_ascii=False, indent=2)
 
-        # Cópia pública adicional (caso /tmp não sirva para leitura direta)
         with open("fretes.json", "w", encoding="utf-8-sig") as fpub:
             json.dump(dados_resultado, fpub, ensure_ascii=False, indent=2)
 
@@ -154,7 +153,6 @@ def enviar_fretes_para_shopify():
                 if agora - tempo <= timedelta(minutes=5):
                     return jsonify({"fretes": registro.get("fretes", [])})
 
-        # Fallback em RAM
         if ULTIMO_FRETE:
             print("🧠 Usando fallback em memória RAM.")
             return jsonify({"fretes": ULTIMO_FRETE.get("fretes", [])})
