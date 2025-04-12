@@ -118,21 +118,25 @@ def calcular_frete():
 
     cep_origem = dados.get("cep_origem", random.choice(CEPS_BRASIL))
     cep_destino = dados.get("cep_destino", random.choice(CEPS_BRASIL))
-    peso = dados.get("peso", round(random.uniform(0.1, 30.0), 2))
+    peso_unitario = dados.get("peso", round(random.uniform(0.1, 30.0), 2))
     largura = dados.get("largura", round(random.uniform(11, 70), 2))
     altura = dados.get("altura", round(random.uniform(2, 60), 2))
     comprimento = dados.get("comprimento", round(random.uniform(16, 100), 2))
-    valor = dados.get("valor", round(random.uniform(10, 2000), 2))
+    valor_unitario = dados.get("valor", round(random.uniform(10, 2000), 2))
+    quantidade = max(1, int(dados.get("quantidade", 1)))
+
+    peso_total = round(peso_unitario * quantidade, 2)
+    valor_total = round(valor_unitario * quantidade, 2)
 
     payload = {
         "from": {"postal_code": cep_origem},
         "to": {"postal_code": cep_destino},
         "products": [{
-            "weight": peso,
+            "weight": peso_total,
             "width": largura,
             "height": altura,
             "length": comprimento,
-            "insurance_value": valor
+            "insurance_value": valor_total
         }]
     }
 
