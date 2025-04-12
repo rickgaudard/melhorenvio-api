@@ -2,7 +2,7 @@ import requests
 import random
 import time
 import json
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 import threading
 import os
 from flask_cors import CORS
@@ -25,24 +25,20 @@ CAMINHO_ARQUIVO = "/tmp/fretes.json"
 ULTIMO_FRETE = None  # fallback RAM
 FILA_FRETES = {}     # fallback por cep destino
 
+
 def gerar_dados_aleatorios():
     return {
-        "from": {
-            "postal_code": random.choice(CEPS_BRASIL)
-        },
-        "to": {
-            "postal_code": random.choice(CEPS_BRASIL)
-        },
-        "products": [
-            {
-                "weight": round(random.uniform(0.1, 30.0), 2),
-                "width": round(random.uniform(11, 70), 2),
-                "height": round(random.uniform(2, 60), 2),
-                "length": round(random.uniform(16, 100), 2),
-                "insurance_value": round(random.uniform(10, 2000), 2)
-            }
-        ]
+        "from": {"postal_code": random.choice(CEPS_BRASIL)},
+        "to": {"postal_code": random.choice(CEPS_BRASIL)},
+        "products": [{
+            "weight": round(random.uniform(0.1, 30.0), 2),
+            "width": round(random.uniform(11, 70), 2),
+            "height": round(random.uniform(2, 60), 2),
+            "length": round(random.uniform(16, 100), 2),
+            "insurance_value": round(random.uniform(10, 2000), 2)
+        }]
     }
+
 
 def consultar_frete(dados):
     try:
@@ -82,14 +78,12 @@ def consultar_frete(dados):
 
             opcoes.append(frete_info)
 
-        return {
-            "entrada": dados,
-            "fretes": opcoes
-        }
+        return {"entrada": dados, "fretes": opcoes}
 
     except Exception as e:
         print(f"[EXCEÇÃO] {str(e)}")
         return {"erro_exception": True, "motivo": str(e)}
+
 
 def salvar_resultado(dados_resultado, arquivo=CAMINHO_ARQUIVO):
     try:
@@ -111,6 +105,7 @@ def salvar_resultado(dados_resultado, arquivo=CAMINHO_ARQUIVO):
 
     except Exception as e:
         print(f"[ERRO SALVANDO JSON] {str(e)}")
+
 
 @app.route('/calcular-frete', methods=['POST'])
 def calcular_frete():
@@ -145,58 +140,52 @@ def calcular_frete():
 
     return jsonify(resultado)
 
-@app.route('/tmp/fretes.json', methods=['GET'])
+
 @app.route('/fretes.json', methods=['GET'])
 def enviar_fretes_para_shopify():
     try:
+        atual = None
         if os.path.exists(CAMINHO_ARQUIVO):
             with open(CAMINHO_ARQUIVO, "r", encoding="utf-8-sig") as f:
-                conteudo = f.read()
-                print("📄 Conteúdo bruto:", conteudo)
-                registro = json.loads(conteudo)
+                atual = json.load(f)
 
-            if "erro_json" in registro or "erro_http" in registro or "erro_exception" in registro:
-                print("❗ Retornando estrutura de erro bruta para debug.")
-                return jsonify(registro)
+        if not atual and ULTIMO_FRETE:
+            atual = ULTIMO_FRETE
 
-            agora = datetime.utcnow()
-            timestamp = registro.get("timestamp")
-            if timestamp:
-                tempo = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
-                if agora - tempo <= timedelta(minutes=5):
-    fretes_raw = registro.get("fretes", [])
-    fretes_formatados = []
+        if not atual:
+            return Response("<p>Sem dados de frete disponíveis.</p>", mimetype='text/html')
 
-    for f in fretes_raw:
-        if not f.get("erro") and (f.get("preco") or f.get("preco") == 0):
-            fretes_formatados.append({
-                "transportadora": f.get("transportadora") or f.get("company", {}).get("name") or "Transportadora",
-                "preco": f.get("preco") or f.get("price"),
-                "prazo_entrega": f.get("prazo_entrega") or f.get("delivery_time")
-            })
+        timestamp = atual.get("timestamp")
+        if timestamp:
+            tempo = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
+            if datetime.utcnow() - tempo > timedelta(minutes=5):
+                return Response("<p>Dados expirados.</p>", mimetype='text/html')
 
-    return jsonify({"fretes": fretes_formatados})
+        fretes_raw = atual.get("fretes", [])
+        linhas = ""
+        for f in fretes_raw:
+            if not f.get("erro") and (f.get("preco") or f.get("preco") == 0):
+                linhas += f"<tr><td>{f.get('transportadora')}</td><td>R$ {f.get('preco')}</td><td>{f.get('prazo_entrega')} dias</td></tr>"
 
-        if ULTIMO_FRETE:
-            print("🧠 Usando fallback da RAM.")
-           fretes_raw = ULTIMO_FRETE.get("fretes", [])
-fretes_formatados = []
+        if not linhas:
+            return Response("<p>Nenhuma opção de frete válida encontrada.</p>", mimetype='text/html')
 
-for f in fretes_raw:
-    if not f.get("erro") and (f.get("preco") or f.get("preco") == 0):
-        fretes_formatados.append({
-            "transportadora": f.get("transportadora") or f.get("company", {}).get("name") or "Transportadora",
-            "preco": f.get("preco") or f.get("price"),
-            "prazo_entrega": f.get("prazo_entrega") or f.get("delivery_time")
-        })
-
-return jsonify({"fretes": fretes_formatados})
-
-        return jsonify({"fretes": []})
+        html = f"""
+        <style>
+          table {{ border-collapse: collapse; width: 100%; }}
+          th, td {{ border: 1px solid #ccc; padding: 8px; text-align: left; }}
+          th {{ background-color: #f4f4f4; }}
+        </style>
+        <table>
+          <thead><tr><th>Transportadora</th><th>Preço</th><th>Prazo</th></tr></thead>
+          <tbody>{linhas}</tbody>
+        </table>
+        """
+        return Response(html, mimetype='text/html')
 
     except Exception as e:
-        print(f"[ERRO LEITURA JSON] {str(e)}")
-        return jsonify({"erro": str(e)}), 500
+        return Response(f"<p>Erro: {str(e)}</p>", mimetype='text/html')
+
 
 @app.route('/fretes-diretos.json', methods=['GET'])
 def acesso_direto_memoria_por_cep():
@@ -205,16 +194,15 @@ def acesso_direto_memoria_por_cep():
         if cep and cep in FILA_FRETES:
             print(f"⚡ Fallback ultra direto por CEP {cep}")
             return jsonify({"fretes": FILA_FRETES[cep].get("fretes", [])})
-
         return jsonify({"fretes": []})
-
     except Exception as e:
-        print(f"[ERRO DIRETO] {str(e)}")
         return jsonify({"erro": str(e)}), 500
+
 
 @app.route('/')
 def home():
     return "API de Frete com suporte à Shopify Online."
+
 
 def iniciar_coletor_em_thread():
     def loop_infinito():
@@ -226,6 +214,7 @@ def iniciar_coletor_em_thread():
     thread = threading.Thread(target=loop_infinito)
     thread.daemon = True
     thread.start()
+
 
 if __name__ == '__main__':
     iniciar_coletor_em_thread()
