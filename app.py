@@ -20,7 +20,9 @@ HEADERS = {
 }
 
 CEPS_BRASIL = [f"{random.randint(1000000, 9999999):08d}" for _ in range(100000)]
-CAMINHO_ARQUIVO = "/tmp/fretes.json"  # <-- Aqui o novo caminho
+CAMINHO_ARQUIVO = "/tmp/fretes.json"
+
+ULTIMO_FRETE = None  # fallback final em RAM
 
 def gerar_dados_aleatorios():
     return {
@@ -90,10 +92,19 @@ def consultar_frete(dados):
 
 def salvar_resultado(dados_resultado, arquivo=CAMINHO_ARQUIVO):
     try:
+        global ULTIMO_FRETE
         dados_resultado["timestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        ULTIMO_FRETE = dados_resultado
+
         with open(arquivo, "w", encoding="utf-8-sig") as f:
             json.dump(dados_resultado, f, ensure_ascii=False, indent=2)
-        print(f"[✔] Salvo com sucesso em {arquivo}")
+
+        # Cópia pública adicional (caso /tmp não sirva para leitura direta)
+        with open("fretes.json", "w", encoding="utf-8-sig") as fpub:
+            json.dump(dados_resultado, fpub, ensure_ascii=False, indent=2)
+
+        print(f"[✔] Salvo com sucesso em {arquivo} e copiado para fretes.json")
+
     except Exception as e:
         print(f"[ERRO SALVANDO JSON] {str(e)}")
 
@@ -127,23 +138,26 @@ def calcular_frete():
     return jsonify(resultado)
 
 @app.route('/tmp/fretes.json', methods=['GET'])
+@app.route('/fretes.json', methods=['GET'])  # rota alternativa legível por Shopify
 def enviar_fretes_para_shopify():
     try:
-        if not os.path.exists(CAMINHO_ARQUIVO):
-            print("📂 fretes.json não encontrado.")
-            return jsonify({"fretes": []})
+        if os.path.exists(CAMINHO_ARQUIVO):
+            with open(CAMINHO_ARQUIVO, "r", encoding="utf-8-sig") as f:
+                conteudo = f.read()
+                print("📄 Conteúdo bruto:", conteudo)
+                registro = json.loads(conteudo)
 
-        with open(CAMINHO_ARQUIVO, "r", encoding="utf-8-sig") as f:
-            conteudo = f.read()
-            print("📄 Conteúdo bruto:", conteudo)
-            registro = json.loads(conteudo)
+            agora = datetime.utcnow()
+            timestamp = registro.get("timestamp")
+            if timestamp:
+                tempo = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
+                if agora - tempo <= timedelta(minutes=5):
+                    return jsonify({"fretes": registro.get("fretes", [])})
 
-        agora = datetime.utcnow()
-        timestamp = registro.get("timestamp")
-        if timestamp:
-            tempo = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
-            if agora - tempo <= timedelta(minutes=5):
-                return jsonify({"fretes": registro.get("fretes", [])})
+        # Fallback em RAM
+        if ULTIMO_FRETE:
+            print("🧠 Usando fallback em memória RAM.")
+            return jsonify({"fretes": ULTIMO_FRETE.get("fretes", [])})
 
         return jsonify({"fretes": []})
 
