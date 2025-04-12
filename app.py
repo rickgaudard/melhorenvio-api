@@ -151,6 +151,10 @@ def enviar_fretes_para_shopify():
                 print("📄 Conteúdo bruto:", conteudo)
                 registro = json.loads(conteudo)
 
+            if "erro_json" in registro or "erro_http" in registro or "erro_exception" in registro:
+                print("❗ Retornando estrutura de erro bruta para debug.")
+                return jsonify(registro)
+
             agora = datetime.utcnow()
             timestamp = registro.get("timestamp")
             if timestamp:
